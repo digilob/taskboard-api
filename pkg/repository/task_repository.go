@@ -3,47 +3,53 @@ package repository
 import (
 	"database/sql"
 
-	"github.com/digilob/taskboard-api/pkg/api"
 	_ "github.com/lib/pq"
 )
 
-type TaskRepository interface {
-	CreateTask(task *api.Task) error
-	GetTasks() ([]api.Task, error)
-	UpdateTask(task *api.Task) error
-	DeleteTask(id int) error
+// Task represents a single task.
+type Task struct {
+	ID          string `json:"id,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status,omitempty"`
+}
+
+type Repository interface {
+	GetAllTasks() ([]Task, error)
+	CreateTask(task Task) (Task, error)
+	UpdateTask(id string, task Task) (Task, error)
+	DeleteTask(id string) error
 }
 
 type PostgresTaskRepository struct {
 	DB *sql.DB
 }
 
-func NewPostgresTaskRepository(db *sql.DB) TaskRepository {
+func NewPostgresTaskRepository(db *sql.DB) Repository {
 	return &PostgresTaskRepository{DB: db}
 }
 
-// Implement the TaskRepository interface for PostgresTaskRepository
-
+// Implement the Repository interface for PostgresTaskRepository
 // CreateTask implementation
-func (r *PostgresTaskRepository) CreateTask(task *api.Task) error {
-	query := "INSERT INTO tasks (title, description, status) VALUES ($1, $2, $3) RETURNING id"
-	err := r.DB.QueryRow(query, task.Title, task.Description, task.Status).Scan(&task.ID)
-	return err
+func (r *PostgresTaskRepository) CreateTask(task Task) (Task, error) {
+	query := "INSERT INTO tasks (title, description) VALUES ($1, $2) RETURNING id"
+	err := r.DB.QueryRow(query, task.Title, task.Description).Scan(&task.ID)
+	return task, err
 }
 
-// GetTasks implementation
-func (r *PostgresTaskRepository) GetTasks() ([]api.Task, error) {
-	query := "SELECT id, title, description, status FROM tasks"
+// GetAllTasks implementation
+func (r *PostgresTaskRepository) GetAllTasks() ([]Task, error) {
+	query := "SELECT id, title, description FROM tasks"
 	rows, err := r.DB.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var tasks []api.Task
+	var tasks []Task
 	for rows.Next() {
-		var task api.Task
-		err := rows.Scan(&task.ID, &task.Title, &task.Description, &task.Status)
+		var task Task
+		err := rows.Scan(&task.ID, &task.Title, &task.Description)
 		if err != nil {
 			return nil, err
 		}
@@ -54,26 +60,14 @@ func (r *PostgresTaskRepository) GetTasks() ([]api.Task, error) {
 }
 
 // UpdateTask implementation
-func (r *PostgresTaskRepository) UpdateTask(task *api.Task) error {
-	query := "UPDATE tasks SET title = $1, description = $2, status = $3 WHERE id = $4"
-	result, err := r.DB.Exec(query, task.Title, task.Description, task.Status, task.ID)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
+func (r *PostgresTaskRepository) UpdateTask(id string, task Task) (Task, error) {
+	query := "UPDATE tasks SET title = $1, description = $2 WHERE id = $3 RETURNING id"
+	err := r.DB.QueryRow(query, task.Title, task.Description, id).Scan(&task.ID)
+	return task, err
 }
 
 // DeleteTask implementation
-func (r *PostgresTaskRepository) DeleteTask(id int) error {
+func (r *PostgresTaskRepository) DeleteTask(id string) error {
 	query := "DELETE FROM tasks WHERE id = $1"
 	result, err := r.DB.Exec(query, id)
 	if err != nil {

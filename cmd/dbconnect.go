@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func connectToDB() *sql.DB {
+func ConnectToDB() *sql.DB {
 	postgresChan := make(chan *sql.DB, 1)
 
 	go func() {
